@@ -1,0 +1,752 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+<title>五子棋</title>
+<style type="text/css">
+    body {
+        text-align: center;
+    }
+
+    #main {
+        text-align: center;
+        background-color: #FAF0E6;
+        margin: 0 auto;
+        margin-top: 80px;
+        outline: none;
+    }
+
+    #bar {
+        position: absolute;
+        left: 50%;
+        top: 30px;
+        *top: 40px;
+        width: 400px;
+        margin-left: -200px;
+        z-index: 10;
+    }
+
+    #bar ul {
+        background: #808080;
+        list-style: none;
+        margin: 0;
+        padding: 1px;
+        border-radius: 15px;
+        display: inline-block;
+        *display: inline;
+        *zoom: 1;
+    }
+
+    #bar ul:after {
+        content: "";
+        display: table;
+        clear: both;
+    }
+
+    #bar li {
+        float: left;
+        list-style: none;
+        line-height: 30px;
+        padding: 0 10px;
+    }
+
+    #bar li.on {
+        background: #FAF0E6;
+        font-weight: bold;
+        border-radius: 15px;
+    }
+
+    #bar li:hover, #bar li a:hover {
+        background: #FAF0E6;
+        border-radius: 15px;
+        color: red;
+    }
+
+    #bar li a {
+        color: #fff;
+        display: inline-block;
+        width: 100%;
+        height: 100%;
+    }
+
+    #bar li.on a {
+        color: red;
+    }
+
+    .square {
+        background-color: #808080;
+        float: left;
+        position: relative;
+    }
+
+    .square .line_x {
+        position: absolute;
+        z-index: 1;
+        height: 1px;
+        background: #A9A9A9;
+        left: 0;
+    }
+
+    .square .line_y {
+        position: absolute;
+        z-index: 1;
+        width: 1px;
+        background: #A9A9A9;
+        top: 0;
+    }
+
+    .square .dot {
+        position: absolute;
+        z-index: 2;
+        border-radius: 50%;
+        background: #000;
+        left: 50%;
+        top: 50%;
+    }
+
+    .square .color_rival {
+        background-color: #000;
+    }
+
+    .square .color_self {
+        background-color: #fff;
+    }
+
+    .hide {
+        display: none;
+    }
+
+    .show {
+        display: block;
+    }
+
+    .screen {
+        margin: 0 auto;
+        position: relative;
+    }
+
+    .btn {
+        background-color: yellow;
+        color: red;
+        width: 80px;
+        height: 30px;
+        font-size: 14px;
+        font-weight: bold;
+        text-align: center;
+        line-height: 30px;
+        cursor: pointer;
+        margin: 0 auto;
+        margin-bottom: 10px;
+    }
+
+    .board,
+    .msg {
+        border: 0px #A9A9A9 solid;
+        position: absolute;
+        z-index: 1;
+    }
+
+    .msg {
+        z-index: 10;
+    }
+
+    .boardTitle {
+        color: #20B2AA;
+        width: 80px;
+        height: 30px;
+        font-size: 14px;
+        font-weight: bold;
+        text-align: center;
+        line-height: 30px;
+        margin: 0px auto;
+        margin-bottom: 10px;
+        border-bottom: 1px red solid;
+    }
+
+    #topInfo {
+        border: 0px;
+        position: absolute;
+        z-index: 1;
+        color: red;
+        font-weight: bold;
+        font-size: 20px;
+        line-height: 80px;
+        top: -80px;
+        left: 50%;
+        width: 200px;
+        height: 80px;
+        margin-left: -100px;
+        letter-spacing: 15px;
+    }
+
+    #bottomInfo {
+        border: 0px;
+        position: absolute;
+        z-index: 1;
+        bottom: -80px;
+        left: 50%;
+        width: 400px;
+        height: 80px;
+        margin-left: -200px;
+    }
+
+    #bottomInfo div {
+        margin-top: 20px;
+        line-height: 20px;
+        color: #ccc;
+        font-family: Tahoma, Verdana, Arial, Helvetica, sans-serif;
+        font-size: 14px;
+    }
+
+</style>
+<script type="text/javascript">
+var game = (function () {
+
+    var isRuning = false,	// 是否正在游戏
+            RIVAL = "rival",	// 对手身份
+            SELF = "self";		// 自己
+
+    // 工具类
+    var util = {
+        dom: document,
+        cache: {},
+        $: function (id) {
+            return util.cache[id] || (util.cache[id] = util.dom.getElementById(id));
+        },
+        find: function (e, tag) {
+            return e.getElementsByTagName(tag);
+        },
+        trim: function (s) {
+            return s.replace(/^\s+|\s+$/g, "");
+        },
+        // 冒泡查找 (target:可以是 标签类型名称，id，类名 三种)
+        bubblingForE: function (e, target) {
+            var isEq = arguments.callee.isEq || (arguments.callee.isEq = function (e, target) {
+                if (/^#/.test(target)) {
+                    return e.id == target.split("#")[1];
+                }
+                else if (/^\./.test(target)) {
+                    return new RegExp(".*" + target.split(".")[1] + ".*").test(e.className);
+                }
+                else {
+                    return e.nodeName.toLowerCase() == target;
+                }
+            });
+            var pe = e;
+            while (e && !isEq(e, target)) {
+                e = e.parentNode;
+                if (e == pe) break;
+            }
+            if (e && isEq(e, target)) {
+                return e;
+            }
+            return null;
+        },
+        addClass: function (e, classes) {
+            var cn = " " + this.trim(e.className) + " ",
+                    cs = classes.split(" ");
+            for (var c in cs) {
+                if (!(new RegExp(" " + cs[c] + " ").test(cn))) {
+                    cn = cn + cs[c] + " ";
+                }
+            }
+            e.className = this.trim(cn);
+            return e;
+        },
+        removeClass: function (e, classes) {
+            var cn = " " + this.trim(e.className) + " ",
+                    cs = classes.split(" ");
+            for (var c in cs) {
+                cn = cn.replace(new RegExp(" " + cs[c] + " ", "g"), " ");
+            }
+            e.className = this.trim(cn);
+            return e;
+        },
+        addHandler: function (e, type, handler) {
+            if (e.addEventListener) {
+                e.addEventListener(type, handler, false);
+            }
+            else if (e.attachEvent) {
+                e.attachEvent("on" + type, handler);
+            }
+            else {
+                e["on" + type] = handler;
+            }
+        },
+        random: function (min, max) {
+            return Math.floor(min + Math.random() * (max - min));
+        }
+    }
+
+    // 棋盘屏幕
+    var Screen = function (r, c, l, id, renderTo) {
+        this.r = r;		// r:屏幕行数
+        this.c = c;		// c:屏幕列数
+        this.l = l;		// l:小方块边长
+        this.id = id;
+        this.renderTo = renderTo;
+        this.sqs = {};
+        this.player = {};
+        this.player[RIVAL] = new Player(RIVAL, this);
+        this.player[SELF] = new Player(SELF, this);
+    }
+
+    Screen.prototype = {
+        constructor: Screen,
+        getW: function () {
+            return this.c * this.l;
+        },
+        getH: function () {
+            return this.r * this.l;
+        },
+        render: function () {
+            var innerHTML = [],
+                    l = this.l,
+                    r = this.r,
+                    c = this.c,
+                    half_l = Math.floor(l / 2);
+
+            var line_x_style = "style='width:" + l + "px;top:" + half_l + "px;'",
+                    line_y_style = "style='height:" + l + "px;left:" + half_l + "px;'",
+                    dot_style = "style='height:" + (l - 6) + "px;width:" + (l - 6) + "px;margin-left:" + (-half_l + 3) + "px;margin-top:" + (-half_l + 3) + "px;'";
+
+            for (var i = 0; i < r * c; i++) {
+                var x = i % c,
+                        y = Math.floor(i / c),
+                        ar = [],
+                        _line_x_style = line_x_style,
+                        _line_y_style = line_y_style;
+
+                if (0 == y) {
+                    _line_y_style = "style='height:" + (half_l + 1) + "px;left:" + half_l + "px;top:" + half_l + "px'";
+                }
+                if (r - 1 == y) {
+                    _line_y_style = "style='height:" + (half_l + 1) + "px;left:" + half_l + "px;'";
+                }
+                if (0 == x) {
+                    _line_x_style = "style='width:" + (half_l + 1) + "px;top:" + half_l + "px;left:" + half_l + "px;'";
+                }
+                if (c - 1 == x) {
+                    _line_x_style = "style='width:" + (half_l + 1) + "px;top:" + half_l + "px;'";
+                }
+
+                ar.push("<div class='square' id='" + x + "_" + y + "_" + this.id + "'");
+                ar.push(" style='width:" + l + "px;height:" + l + "px;'>");
+                ar.push("<i class='line_x' " + _line_x_style + "></i>");
+                ar.push("<i class='line_y' " + _line_y_style + "></i>");
+                ar.push("<span class='dot hide' " + dot_style + "></span>");
+                ar.push("</div>");
+                innerHTML.push(ar.join(""));
+
+                // 初始实例棋盘小方格
+                !this.sqs[x] && (this.sqs[x] = {});
+                this.sqs[x][y] = new Sq(x, y, this.id);
+            }
+            return innerHTML.join("");
+        },
+        show: function (r, c, l, id) {
+            this.r = r || this.r;
+            this.c = c || this.c;
+            this.l = l || this.l;
+            this.id = id || this.id;
+            this.e = util.dom.createElement("div");
+            this.e.id = this.id;
+            this.e.style.width = this.getW() + "px";
+            this.e.style.height = this.getH() + "px";
+            this.e.innerHTML = this.render();
+            this.e.className = "screen";
+            util.$(this.renderTo).appendChild(this.e);
+            this.bindEvent();
+        },
+        reset: function () {
+            for (var i in this.player) {
+                this.player[i].reset();
+            }
+            if (this.sqs) {
+                for (var x in this.sqs) {
+                    for (var y in this.sqs[x]) {
+                        this.sqs[x][y].reset();
+                    }
+                }
+            }
+        },
+        getSqs: function (x, y) {
+            return this.sqs[x] ? this.sqs[x][y] : null;
+        },
+        // 点击事件绑定
+        bindEvent: function () {
+            var self = this;
+            util.addHandler(util.$(this.id), "click", function (event) {
+                if (!isRuning) {
+                    return;
+                }
+                event = event || window.event;
+                var e = event.srcElement || event.target;
+                e = util.bubblingForE(e, ".square");
+                if (e) {
+                    var xy = e.id.split("_");
+                    self.player[SELF].putPiece(xy[0], xy[1]);
+                }
+            });
+        }
+    }
+
+    // 棋盘小方块
+    var Sq = function (x, y, screenId) {
+        this.x = x;
+        this.y = y;
+        this.screenId = screenId;
+    }
+
+    Sq.prototype = {
+        constructor: Sq,
+        getE: function () {
+            return this.e || (this.e = util.$(this.x + "_" + this.y + "_" + this.screenId));
+        },
+        fill: function (identity) {
+            if (this.isFill()) {
+                return;
+            }
+            var e = this.getE();
+            if (e) {
+                this.identity = identity;
+                var dot = util.find(e, "span")[0];
+                util.addClass(dot, " color_" + identity + " show");
+            }
+        },
+        isFill: function () {
+            return !!this.identity;
+        },
+        reset: function () {
+            this.identity = null;
+            var e = this.getE();
+            if (e) {
+                var dot = util.find(e, "span")[0];
+                dot.className = "dot hide";
+            }
+        },
+        // 方块紧邻的8个方块，第一个索引从左边开始，顺时针数8个
+        0: function () {
+            return screen.getSqs(this.x - 1, this.y);
+        },
+        1: function () {
+            return screen.getSqs(this.x - 1, this.y - 1);
+        },
+        2: function () {
+            return screen.getSqs(this.x, this.y - 1);
+        },
+        3: function () {
+            return screen.getSqs(this.x + 1, this.y - 1);
+        },
+        4: function () {
+            return screen.getSqs(this.x + 1, this.y);
+        },
+        5: function () {
+            return screen.getSqs(this.x + 1, this.y + 1);
+        },
+        6: function () {
+            return screen.getSqs(this.x, this.y + 1);
+        },
+        7: function () {
+            return screen.getSqs(this.x - 1, this.y + 1);
+        }
+    }
+
+    // 玩家
+    var Player = function (identity, screen) {
+        this.identity = identity;
+        this.screen = screen;
+        this.lasterSq = null;
+        this.lasterCounts = [];
+    };
+
+    Player.prototype = {
+        constructor: Player,
+        // 放棋子
+        putPiece: function (x, y, notLasterSq) {
+
+            var sq = null;
+            if (x instanceof Sq) {
+                sq = x;
+                notLasterSq = y;
+            }
+            else {
+                sq = this.screen.getSqs(x, y);
+            }
+
+            if (sq && (!sq.isFill())) {
+                sq.fill(this.identity);
+                !notLasterSq && (this.lasterSq = sq);
+                if (!this.isWin()) {
+                    // 自己走完棋，下一步让电脑走
+                    if (SELF == this.identity) {
+                        this.screen.player[RIVAL].letRobotPut();
+                    }
+                }
+                return true;
+            }
+            return false;
+        },
+        reset: function () {
+            this.lasterSq = null;
+        },
+        // 是否是自己的方块
+        isMySq: function (sq) {
+            return sq && (sq.identity == this.identity);
+        },
+        // 是否胜利
+        isWin: function () {
+            var isWin = false;
+            this.lasterCounts = [];
+            // 最后放下的棋子所在的四条线上是否有连续的5个棋子
+            for (var i = 0; i < 4; i++) {
+                var count = 1;
+                // sq_b,sq_f是以最后放下的棋子为原点所对称的两个方格，
+                // 比如水平线上，sq_b就是左边的方格，sq_f为右边的方格,其他三条线以此类推。
+                var sq_b = this.lasterSq[i](),
+                        sq_f = this.lasterSq[i + 4]();
+                while (true) {
+                    var c = !!(this.isMySq(sq_b)) + !!(this.isMySq(sq_f));
+                    if (c > 0 && (count += c) < 5) {
+                        // 如果对称的两个方格是自己的棋子，那么判断该方向向的下一个方格
+                        sq_b = this.isMySq(sq_b) ? sq_b[i]() : null;
+                        sq_f = this.isMySq(sq_f) ? sq_f[i + 4]() : null;
+                    }
+                    else {
+                        break;
+                    }
+                }
+                this.lasterCounts.push({
+                    away: i,
+                    count: count
+                });
+                if (count >= 5) {
+                    isWin = true;
+                    break;
+                }
+            }
+
+            this.lasterCounts.sort(function (a, b) {
+                return b.count - a.count;
+            });
+
+            if (isWin) {
+                isRuning = false;
+                var msg = SELF == this.identity ? "恭喜你，你赢了，再来一盘吧！" : "对不起，你输了，再来一盘吧！"
+                message.show(msg);
+            }
+            return isWin;
+        },
+        // 判断自己下一步是否可以锁定胜局,如果可以锁定胜局，返回锁定胜局的方格
+        isLockWin: function () {
+            var lockSq = null,
+                    line = this.lasterCounts[0],
+                    a = line.away,
+                    c = line.count;
+            if (c == 3) {
+                var sq_b = this.lasterSq[a]();
+                var sq_f = this.lasterSq[a + 4]();
+
+                if (!sq_b || !sq_f) {
+                    return null;
+                }
+
+                if (sq_b.isFill() && !this.isMySq(sq_b)) {
+                    return null;
+                }
+                if (sq_f.isFill() && !this.isMySq(sq_f)) {
+                    return null;
+                }
+
+                var sq_b_next = sq_b[a]();
+                if (sq_b_next && !sq_b_next.isFill()) {
+                    return sq_b;
+                }
+                var sq_f_next = sq_f[a + 4]();
+                if (sq_f_next && !sq_f_next.isFill()) {
+                    return sq_f;
+                }
+
+            }
+            else if (c == 4) {
+                var sq_b = this.lasterSq[a]();
+                var sq_f = this.lasterSq[a + 4]();
+
+                while (this.isMySq(sq_b)) {
+                    sq_b = sq_b[a]();
+                }
+                if (sq_b && !sq_b.isFill()) {
+                    return sq_b;
+                }
+                while (this.isMySq(sq_f)) {
+                    sq_f = sq_f[a + 4]();
+                }
+                if (sq_f && !sq_f.isFill()) {
+                    return sq_f;
+                }
+            }
+            return lockSq;
+        },
+        // 交给电脑走 (暂且是脑残机器人 - -)
+        letRobotPut: function () {
+            if (!this.lasterSq) {
+                var x = Math.floor(this.screen.c / 2);
+                var y = Math.floor(this.screen.r / 2);
+                this.putPiece(x, y);
+            }
+            else {
+//					var d = [0,1,2,3,4,5,6,7];
+//					while(d.length > 0)
+//					{
+//						// 电脑随机一个紧邻的方格走棋
+//						var i = util.random(0,d.length);
+//						var index = d.splice(i,1);
+//						var sq = this.lasterSq[index]();
+//						if(this.putPiece(sq))
+//						{
+//							break;
+//						}
+//					}
+
+                // 如果自己下一步能锁定胜局，自己先走
+                var lockSq = this.isLockWin();
+                if (lockSq) {
+                    this.putPiece(lockSq);
+                    return;
+                }
+
+                // 如果对方下一步能锁定胜局，阻止对方下一步的方格
+                var lockSq = this.screen.player[SELF].isLockWin();
+                if (lockSq) {
+                    this.putPiece(lockSq, true);
+                    return;
+                }
+                // 下一步棋子
+                for (var i = 0; i < 4; i++) {
+                    var j = this.lasterCounts[i].away,
+                            c = this.lasterCounts[i].count,
+                            sq_b = this.lasterSq[j](),
+                            sq_f = this.lasterSq[j + 4]();
+
+                    while (this.isMySq(sq_b)) {
+                        sq_b = sq_b[j]();
+                    }
+                    if (this.putPiece(sq_b)) {
+                        break;
+                    }
+                    while (this.isMySq(sq_f)) {
+                        sq_f = sq_f[j + 4]();
+                    }
+                    if (this.putPiece(sq_f)) {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    // 初始化棋盘屏幕
+    var screen = new Screen(20, 10, 22, "mS", "main");
+
+    // 开始按钮
+    var button = (function () {
+        var start = function () {
+            util.$("start").innerHTML = "重新开始";
+            isRuning = true;
+            screen.reset();
+            message.remove();
+            // 让电脑先走
+            screen.player[RIVAL].letRobotPut();
+
+        };
+        var initEvent = function () {
+            util.$("start").onclick = function () {
+                start();
+            }
+        }
+        return {
+            show: function () {
+                var e = util.dom.createElement("div");
+                e.className = "board";
+                e.style.bottom = "20px";
+                e.style.right = "-160px";
+                e.style.width = "140px";
+                var innerHTML = "<div style='margin-top:10px' class='btn' id='start'>开始游戏</div>";
+                e.innerHTML = innerHTML;
+                screen.e.appendChild(e);
+                initEvent();
+            },
+            start: start
+        }
+    })()
+
+    // game over message
+    var message = (function () {
+        return {
+            show: function (msg) {
+                var e = util.dom.createElement("label");
+                e.className = "msg";
+                e.style.left = "50%";
+                e.style.top = "50%";
+                e.style.width = "250px";
+                e.style.height = "30px";
+                e.style.marginTop = "-15px";
+                e.style.marginLeft = "-125px";
+                var innerHTML = "<div style='color:red;line-height:30px;'>" + msg + "</div>"
+                e.innerHTML = innerHTML;
+                screen.e.appendChild(e);
+            },
+            remove: function () {
+                var msg = util.find(document, "label");
+                for (var i = 0; i < msg.length; i++) {
+                    screen.e && screen.e.removeChild(msg[i]);
+                }
+            }
+        }
+    })()
+
+    // 顶部底部
+    var topBottomInfo = (function () {
+        return {
+            show: function () {
+                // 顶部
+                var top = util.dom.createElement("div");
+                top.id = "topInfo";
+                top.innerHTML = "GOBANG";
+
+                // 底部
+                var bottom = util.dom.createElement("div");
+                bottom.id = "bottomInfo";
+                bottom.innerHTML = "<div>五子棋(脑残电脑，智能算法待完善。。。)</div>";
+
+                screen.e.appendChild(top);
+                screen.e.appendChild(bottom);
+            }
+        }
+    })()
+
+    return {
+        init: function (r, c, l) {
+            screen.show(r, c, l);
+            button.show();
+            topBottomInfo.show();
+        }
+    };
+})()
+
+window.onload = function (e) {
+    game.init(18, 25, 25);
+}
+</script>
+<head>
+<body>
+<div id="main"></div>
+<div id="bar">
+    <ul>
+        <li class=""><a href="tetris.html" target="_blank">俄罗斯方块</a></li>
+        <li class="on"><a href="gobang.html" target="_blank">五子棋</a></li>
+        <li class=""><a href="shortest-A.html" target="_blank">最短路径</a></li>
+    </ul>
+</div>
+</body>
+</html>
